@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#12161a">
+<title>Gestor de descargas</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--bg:#f2f4f7;--sf:#fff;--sf2:#e8ecf1;--tx:#171c21;--mu:#5d6975;--ac:#2f5fe3;--ok:#1b8a5a;--er:#c93b3b;--bd:#d5dbe2;color-scheme:light}
+@media(prefers-color-scheme:dark){:root{--bg:#12161a;--sf:#1b2127;--sf2:#252d35;--tx:#e8edf1;--mu:#8e9aa6;--ac:#6b93ff;--ok:#4cc790;--er:#ff7b7b;--bd:#2c353e;color-scheme:dark}}
+*{box-sizing:border-box;margin:0}
+html,body{background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+main{max-width:640px;margin:0 auto;padding:14px 14px 60px}
+header{display:flex;align-items:center;justify-content:space-between;margin:6px 0 14px}
+h1{font-size:22px;letter-spacing:-.01em}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--bd);background:var(--sf2);border-radius:8px;padding:8px 12px;min-height:40px}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+button.p{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:600}
+button.g{background:none;border-color:transparent;color:var(--mu)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{min-width:0}
+textarea,input[type=text],input[type=url],select{width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:9px 10px;min-height:40px}
+textarea{resize:vertical;min-height:44px;font-family:inherit}
+label{display:block;font-size:13px;color:var(--mu);margin:10px 0 4px}
+.chk{display:flex;gap:8px;align-items:center;margin:10px 0 0;color:var(--tx);font-size:14px}
+.chk input{width:18px;height:18px}
+.meta{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.tag{font-size:12.5px;padding:3px 8px;border-radius:99px;background:var(--sf2);color:var(--mu)}
+.tag.ok{color:var(--ok)}.tag.er{color:var(--er)}
+.warn{font-size:13.5px;color:var(--er);margin:8px 0}
+.item h3{font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.item .sub{font-size:12.5px;color:var(--mu);display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-variant-numeric:tabular-nums}
+.bar{height:12px;border-radius:6px;background:var(--sf2);margin-top:10px;overflow:hidden;position:relative}
+.bar>i{display:block;height:100%;background:var(--ac);border-radius:6px;transition:width .25s}
+.bar::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 calc(10% - 2px),var(--sf) calc(10% - 2px) 10%)}
+.bar.ind>i{width:30%!important;animation:ind 1.1s infinite ease-in-out}
+@keyframes ind{50%{margin-left:70%}}
+@media(prefers-reduced-motion:reduce){.bar.ind>i{animation:none}.bar>i{transition:none}}
+.done .bar>i{background:var(--ok)}.fail .bar>i{background:var(--er)}
+.acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.acts button{padding:6px 10px;min-height:36px;font-size:14px}
+.empty{text-align:center;color:var(--mu);padding:28px 10px}
+dialog{border:1px solid var(--bd);border-radius:14px;background:var(--sf);color:var(--tx);width:min(92vw,420px);padding:16px}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+.list-h{display:flex;justify-content:space-between;align-items:center;margin:16px 2px 8px;color:var(--mu);font-size:13.5px}
+#toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:9px 14px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;z-index:9}
+#toast.on{opacity:1}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Descargas</h1>
+  <div class="row"><button id="bInstall" class="g" hidden>Instalar</button><button id="bCfg" class="g" aria-label="Ajustes">Ajustes</button></div>
+</header>
+
+<section class="card">
+  <label for="url" style="margin-top:0">Enlace de descarga</label>
+  <textarea id="url" rows="1" placeholder="https://… (puedes pegar varios, uno por línea)" inputmode="url" autocomplete="off" spellcheck="false"></textarea>
+  <div class="row" style="margin-top:10px">
+    <button id="bPaste">Pegar</button>
+    <button id="bAnalyze" class="p" style="flex:1">Analizar enlace</button>
+  </div>
+  <div id="info" hidden>
+    <div class="meta" id="tags"></div>
+    <div class="warn" id="warn" hidden></div>
+    <label for="name">Nombre del archivo</label>
+    <input type="text" id="name" autocomplete="off" spellcheck="false">
+    <label class="chk" id="askRow" for="ask"><input type="checkbox" id="ask"> Elegir dónde guardar</label>
+    <div class="row" style="margin-top:12px">
+      <button id="bGo" class="p" style="flex:1">Descargar</button>
+      <button id="bOpen" hidden>Abrir en el navegador</button>
+    </div>
+  </div>
+</section>
+
+<div class="list-h"><span id="count">Sin descargas</span><button id="bClear" class="g" hidden>Limpiar finalizadas</button></div>
+<div id="list"></div>
+</main>
+
+<dialog id="dCfg">
+  <h2 style="font-size:18px;margin-bottom:6px">Ajustes</h2>
+  <label for="cMax">Descargas simultáneas</label>
+  <select id="cMax"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+  <label for="cRetry">Reintentos automáticos si se corta</label>
+  <select id="cRetry"><option value="0">Ninguno</option><option value="3">3</option><option value="6">6</option><option value="10">10</option></select>
+  <label class="chk" for="cAsk"><input type="checkbox" id="cAsk"> Preguntar dónde guardar por defecto</label>
+  <label class="chk" for="cNot"><input type="checkbox" id="cNot"> Avisar al terminar (notificación)</label>
+  <label class="chk" for="cWake"><input type="checkbox" id="cWake"> Mantener la pantalla encendida mientras descarga</label>
+  <div class="row" style="margin-top:16px;justify-content:flex-end"><button id="cOk" class="p">Listo</button></div>
+</dialog>
+<div id="toast" role="status"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const HAS_FS='showSaveFilePicker' in window;
+const DEF={max:2,retry:3,ask:true,notify:false,wake:true};
+let cfg={...DEF,...JSON.parse(localStorage.getItem('dl_cfg')||'{}')};
+let items=[],pending=null,wake=null;
+
+/* ---------- utilidades ---------- */
+const fmt=b=>{if(!b&&b!==0)return'—';const u=['B','KB','MB','GB','TB'];let i=0;while(b>=1024&&i<4){b/=1024;i++}return b.toFixed(i?1:0)+' '+u[i]};
+const fmtT=s=>{if(!isFinite(s)||s<0)return'—';s=Math.round(s);const h=s/3600|0,m=s%3600/60|0;return h?`${h} h ${m} min`:m?`${m} min ${s%60} s`:`${s} s`};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),2600)}
+function nameFromUrl(u){try{const p=new URL(u).pathname.split('/').filter(Boolean).pop()||'descarga';return decodeURIComponent(p)}catch{return'descarga'}}
+function nameFromCD(cd){if(!cd)return null;let m=/filename\*\s*=\s*(?:UTF-8'')?([^;]+)/i.exec(cd);if(m)try{return decodeURIComponent(m[1].replace(/"/g,'').trim())}catch{}m=/filename\s*=\s*"?([^";]+)"?/i.exec(cd);return m?m[1].trim():null}
+const clean=n=>n.replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').trim()||'descarga';
+const urls=t=>(t.match(/https?:\/\/[^\s<>"']+/gi)||[]);
+function save(){localStorage.setItem('dl_cfg',JSON.stringify(cfg))}
+function persist(){localStorage.setItem('dl_hist',JSON.stringify(items.map(i=>({id:i.id,url:i.url,name:i.name,size:i.size,type:i.type,ranges:i.ranges,received:i.received,state:['descargando','en cola','pausada'].includes(i.state)?'interrumpida':i.state,err:i.err,when:i.when})).slice(0,60)))}
+
+/* ---------- análisis ---------- */
+async function analyze(url){
+  const r={url,name:nameFromUrl(url),size:0,type:'',ranges:false,cors:true,ok:true};
+  const read=h=>{
+    const cd=nameFromCD(h.get('content-disposition'));if(cd)r.name=cd;
+    r.type=(h.get('content-type')||'').split(';')[0];
+    if(/bytes/i.test(h.get('accept-ranges')||''))r.ranges=true;
+  };
+  try{
+    const h=await fetch(url,{method:'HEAD'});
+    if(!h.ok)throw new Error('HTTP '+h.status);
+    read(h.headers);r.size=+h.headers.get('content-length')||0;
+  }catch(e1){
+    try{ // algunos servidores no aceptan HEAD: probamos con un rango de 1 byte
+      const g=await fetch(url,{headers:{Range:'bytes=0-0'}});
+      if(!g.ok)throw new Error('HTTP '+g.status);
+      read(g.headers);
+      const cr=g.headers.get('content-range');
+      if(g.status===206){r.ranges=true;const m=/\/(\d+)$/.exec(cr||'');if(m)r.size=+m[1]}
+      else r.size=+g.headers.get('content-length')||0;
+      g.body&&g.body.cancel();
+    }catch(e2){r.cors=!(e2 instanceof TypeError);r.ok=r.cors;r.err=e2.message}
+  }
+  r.name=clean(r.name);
+  return r;
+}
+
+async function onAnalyze(){
+  const list=urls($('#url').value);
+  if(!list.length){toast('Pega un enlace http o https válido');return}
+  if(list.length>1){list.forEach(u=>add({url:u,name:clean(nameFromUrl(u)),size:0,type:'',ranges:false},null));$('#url').value='';$('#info').hidden=true;toast(list.length+' enlaces añadidos');return}
+  $('#bAnalyze').disabled=true;$('#bAnalyze').textContent='Analizando…';
+  pending=await analyze(list[0]);
+  $('#bAnalyze').disabled=false;$('#bAnalyze').textContent='Analizar enlace';
+  showInfo();
+}
+function showInfo(){
+  const p=pending,t=[];
+  if(p.cors){
+    t.push(`<span class="tag">${fmt(p.size)}${p.size?'':' (tamaño desconocido)'}</span>`);
+    if(p.type)t.push(`<span class="tag">${esc(p.type)}</span>`);
+    t.push(p.ranges?'<span class="tag ok">Admite pausa y reanudación</span>':'<span class="tag er">Sin pausa: el servidor no lo permite</span>');
+  }
+  $('#tags').innerHTML=t.join('');
+  const w=$('#warn');
+  if(!p.cors){w.hidden=false;w.textContent='Este servidor no permite que una app lea el archivo (bloqueo CORS). No se puede analizar ni pausar desde aquí. Puedes abrirlo en el navegador para que lo descargue él.'}
+  else if(!p.ok){w.hidden=false;w.textContent='No se pudo comprobar el enlace ('+(p.err||'error')+'). Puedes intentar descargarlo igualmente.'}
+  else w.hidden=true;
+  $('#name').value=p.name;
+  $('#askRow').hidden=!HAS_FS;$('#ask').checked=HAS_FS&&cfg.ask;
+  $('#bGo').hidden=!p.cors;$('#bOpen').hidden=p.cors;
+  $('#info').hidden=false;
+}
+
+/* ---------- cola de descargas ---------- */
+let seq=Date.now();
+function add(meta,handle){
+  const it={id:++seq,url:meta.url,name:meta.name,size:meta.size||0,type:meta.type||'',ranges:!!meta.ranges,received:0,state:'en cola',speed:0,handle,writable:null,chunks:[],ctrl:null,tries:0,when:Date.now()};
+  items.unshift(it);render();pump();return it;
+}
+async function onGo(){
+  const p=pending;if(!p)return;
+  const name=clean($('#name').value);let handle=null;
+  if(HAS_FS&&$('#ask').checked){
+    try{
+      const ext=/\.[A-Za-z0-9]{1,8}$/.exec(name);
+      handle=await showSaveFilePicker({suggestedName:name,...(ext&&p.type?{types:[{description:'Archivo',accept:{[p.type]:[ext[0]]}}]}:{})});
+    }catch(e){if(e.name==='AbortError')return;handle=null}
+  }
+  add({...p,name:handle?handle.name:name},handle);
+  $('#url').value='';$('#info').hidden=true;pending=null;
+}
+function pump(){
+  let act=items.filter(i=>i.state==='descargando').length;
+  for(const it of [...items].reverse()){
+    if(act>=cfg.max)break;
+    if(it.state==='en cola'){act++;run(it)}
+  }
+  updateWake();
+}
+async function run(it){
+  it.state='descargando';it.err='';it.ctrl=new AbortController();render();
+  let last=it.received,lastT=performance.now();
+  try{
+    const headers={};if(it.received>0)headers.Range='bytes='+it.received+'-';
+    const r=await fetch(it.url,{headers,signal:it.ctrl.signal});
+    if(!r.ok)throw new Error('El servidor respondió '+r.status);
+    if(it.received>0&&r.status!==206){it.received=0;it.chunks=[];if(it.writable)await it.writable.truncate(0).catch(()=>{});last=0}
+    if(!it.size){const l=+r.headers.get('content-length');if(l)it.size=l}
+    if(!it.writable&&it.handle)it.writable=await it.handle.createWritable({keepExistingData:false});
+    const rd=r.body.getReader();
+    for(;;){
+      const {done,value}=await rd.read();if(done)break;
+      if(it.writable)await it.writable.write(value);else it.chunks.push(value);
+      it.received+=value.length;
+      const now=performance.now();
+      if(now-lastT>500){const s=(it.received-last)/((now-lastT)/1000);it.speed=it.speed?it.speed*.6+s*.4:s;last=it.received;lastT=now;update(it)}
+    }
+    await finish(it);
+  }catch(e){
+    if(e.name==='AbortError'&&['pausada','cancelada'].includes(it.state))return;
+    if(it.tries<cfg.retry){it.tries++;it.state='en cola';it.err='Reintentando ('+it.tries+'/'+cfg.retry+')…';render();setTimeout(pump,Math.min(1000*2**it.tries,15000));return}
+    it.state='error';it.err=e.message==='Failed to fetch'?'Conexión interrumpida o bloqueada por el servidor':e.message;it.speed=0;
+  }
+  it.speed=0;render();persist();pump();
+}
+async function finish(it){
+  if(it.writable){await it.writable.close();it.writable=null}
+  else{
+    const blob=new Blob(it.chunks,{type:it.type||'application/octet-stream'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=it.name;document.body.append(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+  }
+  it.chunks=[];it.state='completada';it.size=it.size||it.received;
+  if(cfg.notify&&Notification.permission==='granted')try{new Notification('Descarga completada',{body:it.name,icon:'icon-192.png'})}catch{}
+}
+function pause(it){if(!it.ranges)return;it.state='pausada';it.speed=0;it.ctrl&&it.ctrl.abort();render();persist();pump()}
+function resume(it){it.state='en cola';it.tries=0;render();pump()}
+async function cancel(it){
+  it.state='cancelada';it.ctrl&&it.ctrl.abort();
+  if(it.writable){try{await it.writable.abort()}catch{}it.writable=null}
+  it.chunks=[];it.speed=0;render();persist();pump();
+}
+function retry(it){it.received=0;it.chunks=[];it.writable=null;it.handle=null;it.tries=0;resume(it)}
+function remove(it){items=items.filter(x=>x!==it);render();persist()}
+
+/* ---------- interfaz ---------- */
+function card(it){
+  const pct=it.size?Math.min(100,it.received/it.size*100):0;
+  const live=it.state==='descargando';
+  const cls=it.state==='completada'?'done':['error','cancelada','interrumpida'].includes(it.state)?'fail':'';
+  const eta=live&&it.speed&&it.size?fmtT((it.size-it.received)/it.speed):'';
+  const left=it.state==='completada'?fmt(it.size):`${fmt(it.received)}${it.size?' de '+fmt(it.size):''}`;
+  const right=live?`${fmt(it.speed)}/s${eta?' · '+eta:''}`:it.err&&it.state!=='en cola'?esc(it.err):it.state==='en cola'&&it.err?esc(it.err):it.state;
+  let b='';
+  if(live)b+=it.ranges?`<button data-a="pause">Pausar</button>`:`<button disabled title="El servidor no permite pausar">Pausar</button>`;
+  if(it.state==='pausada')b+=`<button class="p" data-a="resume">Reanudar</button>`;
+  if(['error','cancelada','interrumpida'].includes(it.state))b+=`<button class="p" data-a="retry">Reintentar</button>`;
+  if(['descargando','en cola','pausada'].includes(it.state))b+=`<button data-a="cancel">Cancelar</button>`;
+  else{b+=`<button data-a="copy">Copiar enlace</button><button data-a="rm">Quitar</button>`}
+  return `<article class="card item ${cls}" data-id="${it.id}"><h3>${esc(it.name)}</h3>
+  <div class="bar ${live&&!it.size?'ind':''}" role="progressbar" aria-valuenow="${pct|0}" aria-valuemin="0" aria-valuemax="100"><i style="width:${it.state==='completada'?100:pct}%"></i></div>
+  <div class="sub"><span class="l">${left}${it.size&&it.state!=='completada'?' · '+(pct|0)+'%':''}</span><span class="r">${right}</span></div>
+  <div class="acts">${b}</div></article>`;
+}
+function render(){
+  $('#list').innerHTML=items.length?items.map(card).join(''):'<div class="empty">Pega un enlace arriba para empezar.</div>';
+  const n=items.filter(i=>['descargando','en cola','pausada'].includes(i.state)).length;
+  $('#count').textContent=items.length?`${items.length} en total · ${n} activa${n===1?'':'s'}`:'Sin descargas';
+  $('#bClear').hidden=!items.some(i=>['completada','error','cancelada','interrumpida'].includes(i.state));
+}
+function update(it){ // actualización ligera sin repintar toda la lista
+  const el=$(`[data-id="${it.id}"]`);if(!el)return;
+  const pct=it.size?Math.min(100,it.received/it.size*100):0;
+  const i=el.querySelector('.bar>i');if(i&&it.size)i.style.width=pct+'%';
+  el.querySelector('.l').textContent=`${fmt(it.received)}${it.size?' de '+fmt(it.size)+' · '+(pct|0)+'%':''}`;
+  const eta=it.speed&&it.size?fmtT((it.size-it.received)/it.speed):'';
+  el.querySelector('.r').textContent=`${fmt(it.speed)}/s${eta?' · '+eta:''}`;
+}
+$('#list').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-a]');if(!b)return;
+  const it=items.find(x=>x.id==b.closest('[data-id]').dataset.id);if(!it)return;
+  ({pause,resume,cancel,retry,rm:remove,copy:i=>navigator.clipboard.writeText(i.url).then(()=>toast('Enlace copiado'))})[b.dataset.a](it);
+});
+$('#bClear').onclick=()=>{items=items.filter(i=>['descargando','en cola','pausada'].includes(i.state));render();persist()};
+$('#bPaste').onclick=async()=>{try{$('#url').value=await navigator.clipboard.readText();onAnalyze()}catch{toast('Permite el acceso al portapapeles o pega manualmente')}};
+$('#bAnalyze').onclick=onAnalyze;$('#bGo').onclick=onGo;
+$('#bOpen').onclick=()=>pending&&window.open(pending.url,'_blank','noopener');
+$('#url').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();onAnalyze()}});
+
+/* ---------- ajustes ---------- */
+$('#bCfg').onclick=()=>{$('#cMax').value=cfg.max;$('#cRetry').value=cfg.retry;$('#cAsk').checked=cfg.ask;$('#cAsk').disabled=!HAS_FS;$('#cNot').checked=cfg.notify;$('#cWake').checked=cfg.wake;$('#dCfg').showModal()};
+$('#cOk').onclick=async()=>{
+  cfg={max:+$('#cMax').value,retry:+$('#cRetry').value,ask:$('#cAsk').checked,notify:$('#cNot').checked,wake:$('#cWake').checked};
+  if(cfg.notify&&'Notification' in window&&Notification.permission==='default')await Notification.requestPermission();
+  if(cfg.notify&&(!('Notification' in window)||Notification.permission!=='granted')){cfg.notify=false;toast('Notificaciones no permitidas')}
+  save();$('#dCfg').close();pump();
+};
+async function updateWake(){
+  const need=cfg.wake&&items.some(i=>i.state==='descargando');
+  try{
+    if(need&&!wake&&navigator.wakeLock){wake=await navigator.wakeLock.request('screen');wake.addEventListener('release',()=>wake=null)}
+    else if(!need&&wake){await wake.release();wake=null}
+  }catch{}
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')updateWake()});
+
+/* ---------- instalación, compartir, arranque ---------- */
+let dip=null;
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();dip=e;$('#bInstall').hidden=false});
+$('#bInstall').onclick=async()=>{if(dip){dip.prompt();await dip.userChoice;dip=null;$('#bInstall').hidden=true}};
+if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+addEventListener('beforeunload',e=>{if(items.some(i=>i.state==='descargando')){e.preventDefault();e.returnValue=''}});
+
+try{items=JSON.parse(localStorage.getItem('dl_hist')||'[]').map(i=>({...i,speed:0,chunks:[],handle:null,writable:null,ctrl:null,tries:0}))}catch{}
+render();
+const q=new URLSearchParams(location.search);
+const shared=urls([q.get('url'),q.get('text'),q.get('title')].filter(Boolean).join(' '));
+if(shared.length){$('#url').value=shared.join('\n');history.replaceState(null,'',location.pathname);onAnalyze()}
+</script>
+</body>
+</html>
